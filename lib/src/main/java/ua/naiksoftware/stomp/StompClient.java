@@ -139,11 +139,22 @@ public class StompClient {
         messagesDisposable = connectionProvider.messages()
                 .map(StompMessage::from)
                 .filter(heartBeatTask::consumeHeartBeat)
+                .filter(this::consumeErrorMessage)
                 .doOnNext(getMessageStream()::onNext)
                 .filter(msg -> msg.getStompCommand().equals(StompCommand.CONNECTED))
                 .subscribe(stompMessage -> {
                     getConnectionStream().onNext(true);
+                }, error -> {
+                    getConnectionStream().onError(error);
                 });
+    }
+
+    private boolean consumeErrorMessage(StompMessage message) {
+        if (message == null || message.getStompCommand() == null || message.getStompCommand().equals(StompCommand.ERROR) != true) {
+            return true;
+        }
+        lifecyclePublishSubject.onNext(new LifecycleEvent(LifecycleEvent.Type.ERROR, message.getPayload()));
+        return false;
     }
 
     synchronized private BehaviorSubject<Boolean> getConnectionStream() {
